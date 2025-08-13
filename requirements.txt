@@ -1,0 +1,17 @@
+Flask==3.0.3
+gunicorn==21.2.0
+
+# Face recognition and ML
+deepface==0.0.79
+face-recognition==1.3.0
+face-recognition-models==0.3.0
+
+# OpenCV (headless for server environments)
+opencv-python-headless==4.11.0.86
+numpy==1.26.4
+
+# Image processing
+Pillow==10.3.0
+
+# Utility
+requests==2.31.0
