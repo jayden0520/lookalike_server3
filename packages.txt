@@ -1,0 +1,5 @@
+cmake
+libboost-all-dev
+libopenblas-dev
+libjpeg-dev
+libpng-dev
