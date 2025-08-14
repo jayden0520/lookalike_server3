@@ -5,19 +5,21 @@ import uuid
 import imghdr
 from flask_cors import CORS
 import numpy as np
+import threading
+import webbrowser 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ✅ Make sure this matches your actual celebrity images folder path
-CELEB_DIR = os.path.join(BASE_DIR, "celebrity_images")
+CELEB_DIR = os.path.join(BASE_DIR, "static")
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend/web")
 
 if not os.path.exists(CELEB_DIR):
     raise FileNotFoundError(f"Celebrity images folder not found: {CELEB_DIR}")
 
 app = Flask(
     __name__,
-    static_folder=os.path.join(BASE_DIR, "static"),
-    template_folder=os.path.join(BASE_DIR, "templates")
+    static_folder=CELEB_DIR,        
+    template_folder=FRONTEND_DIR     
 )
 
 CORS(app)
@@ -42,6 +44,13 @@ for filename in os.listdir(CELEB_DIR):
     except Exception as e:
         print(f"[ERROR] Skipping {filename}: {e}")
 
+
+@app.route('/')
+def serve_frontend():
+    """Serve the main frontend HTML file."""
+    return send_from_directory(FRONTEND_DIR, "index.html")
+
+
 @app.route('/match', methods=['POST'])
 def match_celeb():
     if 'image' not in request.files:
@@ -57,8 +66,6 @@ def match_celeb():
 
     try:
         input_image = face_recognition.load_image_file(temp_filename)
-
-        # ✅ First find faces with the chosen algorithm
         face_locations = face_recognition.face_locations(input_image, model=algorithm)
         input_encodings = face_recognition.face_encodings(input_image, known_face_locations=face_locations)
 
@@ -71,7 +78,6 @@ def match_celeb():
         match_name = celebrity_names[best_index]
         similarity = 1 - distances[best_index]
 
-        # ✅ Get full image URL
         host_url = request.host_url.rstrip('/')
         image_url = f"{host_url}/static/{match_name}.jpg"
 
@@ -88,9 +94,17 @@ def match_celeb():
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
+
 @app.route('/static/<filename>')
 def serve_static_file(filename):
     return send_from_directory(CELEB_DIR, filename)
 
+
+def open_browser():
+    """Automatically open the frontend in the browser."""
+    webbrowser.open_new("http://127.0.0.1:5000/")
+
+
 if __name__ == '__main__':
+    threading.Timer(1, open_browser).start() 
     app.run(debug=True, host='0.0.0.0', port=5000)
