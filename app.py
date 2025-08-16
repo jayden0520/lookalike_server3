@@ -112,4 +112,4 @@ if __name__ == '__main__':
     if port == 8080:
         threading.Timer(1, open_browser).start()
 
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=True, host='0.0.0.0', port=8080)
