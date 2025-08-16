@@ -11,7 +11,7 @@ import webbrowser
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CELEB_DIR = os.path.join(BASE_DIR, "static")
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend/web")
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
 if not os.path.exists(CELEB_DIR):
     raise FileNotFoundError(f"Celebrity images folder not found: {CELEB_DIR}")
@@ -106,10 +106,10 @@ def open_browser():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # Read from env or use 5000 locally
+    port = int(os.environ.get("PORT", 8080))  # Read from env or use 5000 locally
 
     # Only auto-open browser if running locally
-    if port == 5000:
+    if port == 8080:
         threading.Timer(1, open_browser).start()
 
     app.run(debug=True, host='0.0.0.0', port=port)
