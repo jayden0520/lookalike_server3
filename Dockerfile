@@ -29,4 +29,4 @@ COPY . .
 EXPOSE 8080
 
 # Run the Flask app with gunicorn
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:5000", "--timeout", "600"]
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8080", "--timeout", "600"]
