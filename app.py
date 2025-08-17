@@ -9,7 +9,6 @@ import threading
 import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 CELEB_DIR = os.path.join(BASE_DIR, "static")
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
@@ -21,24 +20,46 @@ app = Flask(
     static_folder=CELEB_DIR,
     template_folder=FRONTEND_DIR
 )
-
 CORS(app)
 
-# -------- Global cache (load only once) --------
-encodings_cache = None
-names_cache = None
+# --------------------------------------------------------------------
+# ✅ Load celebrity encodings ONCE at startup
+# --------------------------------------------------------------------
+celebrity_encodings = []
+celebrity_names = []
+
+for filename in os.listdir(CELEB_DIR):
+    path = os.path.join(CELEB_DIR, filename)
+    if imghdr.what(path):           # skip non-images
+        try:
+            img = face_recognition.load_image_file(path)
+            enc = face_recognition.face_encodings(img)
+            if enc:
+                celebrity_encodings.append(enc[0])
+                celebrity_names.append(os.path.splitext(filename)[0])
+                print(f"[INFO] Loaded: {filename}")
+        except Exception as e:
+            print(f"[WARN] Skipped {filename}: {e}")
 
 
+# --------------------------------------------------------------------
+# Serve Flutter web (static)
+# --------------------------------------------------------------------
 @app.route('/')
 def serve_frontend():
-    """Serve the main frontend HTML file."""
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
-@app.route('/match', methods=['POST','OPTIONS'])
-def match_celeb():
-    global encodings_cache, names_cache
+@app.route('/static/<filename>')
+def serve_static_file(filename):
+    return send_from_directory(CELEB_DIR, filename)
 
+
+# --------------------------------------------------------------------
+# Matching endpoint
+# --------------------------------------------------------------------
+@app.route('/match', methods=['POST'])
+def match_celeb():
     if 'image' not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
@@ -53,32 +74,16 @@ def match_celeb():
     try:
         input_image = face_recognition.load_image_file(temp_filename)
         face_locations = face_recognition.face_locations(input_image, model=algorithm)
-        if not face_locations:
+        encs = face_recognition.face_encodings(input_image, known_face_locations=face_locations)
+
+        if not encs:
             return jsonify({"error": "No face found"}), 400
 
-        input_encoding = face_recognition.face_encodings(
-            input_image, known_face_locations=face_locations
-        )[0]
-
-        # ✅  Load celebrity encodings only ONE time (after first request)
-        if encodings_cache is None:
-            encodings_cache = []
-            names_cache = []
-            for filename in os.listdir(CELEB_DIR):
-                path = os.path.join(CELEB_DIR, filename)
-                if imghdr.what(path):  # skip non-images
-                    img = face_recognition.load_image_file(path)
-                    enc = face_recognition.face_encodings(img)
-                    if enc:
-                        encodings_cache.append(enc[0])
-                        names_cache.append(os.path.splitext(filename)[0])
-            print(f"[INFO] Loaded {len(names_cache)} celebrity faces into memory")
-
-        # Match against cached encodings
-        distances = face_recognition.face_distance(encodings_cache, input_encoding)
-        best_index = int(np.argmin(distances))
-        match_name = names_cache[best_index]
-        similarity = 1 - distances[best_index]
+        input_encoding = encs[0]
+        distances = face_recognition.face_distance(celebrity_encodings, input_encoding)
+        best_idx = np.argmin(distances)
+        match_name = celebrity_names[best_idx]
+        similarity = 1 - distances[best_idx]
 
         host_url = request.host_url.rstrip('/')
         image_url = f"{host_url}/static/{match_name}.jpg"
@@ -86,7 +91,7 @@ def match_celeb():
         return jsonify({
             "match_name": match_name,
             "similarity": round(similarity * 100, 2),
-            "celebrity_image": image_url,
+            "celebrity_image": image_url
         })
 
     except Exception as e:
@@ -97,18 +102,15 @@ def match_celeb():
             os.remove(temp_filename)
 
 
-@app.route('/static/<filename>')
-def serve_static_file(filename):
-    return send_from_directory(CELEB_DIR, filename)
-
-
+# --------------------------------------------------------------------
+# Local dev auto-open
+# --------------------------------------------------------------------
 def open_browser():
-    """Automatically open the frontend in the browser when running locally."""
     webbrowser.open_new("http://127.0.0.1:8080/")
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))  # Fly.io expects 8080
+    port = int(os.environ.get("PORT", 8080))  # Fly expects 8080
     if port == 8080:
         threading.Timer(1, open_browser).start()
     app.run(debug=True, host='0.0.0.0', port=8080)
