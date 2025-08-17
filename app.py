@@ -6,7 +6,7 @@ import imghdr
 from flask_cors import CORS
 import numpy as np
 import threading
-import webbrowser 
+import webbrowser
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -18,31 +18,11 @@ if not os.path.exists(CELEB_DIR):
 
 app = Flask(
     __name__,
-    static_folder=CELEB_DIR,        
-    template_folder=FRONTEND_DIR     
+    static_folder=CELEB_DIR,
+    template_folder=FRONTEND_DIR
 )
 
 CORS(app)
-
-# --- Load celebrity encodings once ---
-celebrity_encodings = []
-celebrity_names = []
-
-for filename in os.listdir(CELEB_DIR):
-    path = os.path.join(CELEB_DIR, filename)
-
-    if not imghdr.what(path):  # Skip non-images
-        continue
-
-    try:
-        image = face_recognition.load_image_file(path)
-        encodings = face_recognition.face_encodings(image)
-        if encodings:
-            celebrity_encodings.append(encodings[0])
-            celebrity_names.append(os.path.splitext(filename)[0])
-            print(f"[INFO] Loaded: {filename}")
-    except Exception as e:
-        print(f"[ERROR] Skipping {filename}: {e}")
 
 
 @app.route('/')
@@ -65,6 +45,7 @@ def match_celeb():
     file.save(temp_filename)
 
     try:
+        # Load the submitted image
         input_image = face_recognition.load_image_file(temp_filename)
         face_locations = face_recognition.face_locations(input_image, model=algorithm)
         input_encodings = face_recognition.face_encodings(input_image, known_face_locations=face_locations)
@@ -73,6 +54,20 @@ def match_celeb():
             return jsonify({"error": "No face found"}), 400
 
         input_encoding = input_encodings[0]
+
+        # ✅ Load celebrity encodings only for this request
+        celebrity_encodings = []
+        celebrity_names = []
+        for filename in os.listdir(CELEB_DIR):
+            path = os.path.join(CELEB_DIR, filename)
+            if imghdr.what(path):  # skip non-images
+                img = face_recognition.load_image_file(path)
+                encodings = face_recognition.face_encodings(img)
+                if encodings:
+                    celebrity_encodings.append(encodings[0])
+                    celebrity_names.append(os.path.splitext(filename)[0])
+
+        # Match
         distances = face_recognition.face_distance(celebrity_encodings, input_encoding)
         best_index = np.argmin(distances)
         match_name = celebrity_names[best_index]
@@ -101,15 +96,12 @@ def serve_static_file(filename):
 
 
 def open_browser():
-    """Automatically open the frontend in the browser."""
-    webbrowser.open_new("http://127.0.0.1:5000/")
+    """Automatically open the frontend in the browser when running locally."""
+    webbrowser.open_new("http://127.0.0.1:8080/")
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))  # Read from env or use 5000 locally
-
-    # Only auto-open browser if running locally
+    port = int(os.environ.get("PORT", 8080))  # Fly.io expects 8080
     if port == 8080:
         threading.Timer(1, open_browser).start()
-
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=port)
