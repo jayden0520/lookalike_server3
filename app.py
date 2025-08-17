@@ -35,7 +35,7 @@ def serve_frontend():
     return send_from_directory(FRONTEND_DIR, "index.html")
 
 
-@app.route('/match', methods=['POST'])
+@app.route('/match', methods=['POST','OPTIONS'])
 def match_celeb():
     global encodings_cache, names_cache
 
