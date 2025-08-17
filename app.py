@@ -45,19 +45,6 @@ for filename in os.listdir(CELEB_DIR):
 # --------------------------------------------------------------------
 # Serve Flutter web (static)
 # --------------------------------------------------------------------
-@app.route('/')
-def serve_frontend():
-    return send_from_directory(FRONTEND_DIR, "index.html")
-
-
-@app.route('/static/<filename>')
-def serve_static_file(filename):
-    return send_from_directory(CELEB_DIR, filename)
-
-
-# --------------------------------------------------------------------
-# Matching endpoint
-# --------------------------------------------------------------------
 @app.route('/match', methods=['POST'])
 def match_celeb():
     if 'image' not in request.files:
@@ -72,6 +59,7 @@ def match_celeb():
     file.save(temp_filename)
 
     try:
+        # Load the submitted image
         input_image = face_recognition.load_image_file(temp_filename)
         face_locations = face_recognition.face_locations(input_image, model=algorithm)
         encs = face_recognition.face_encodings(input_image, known_face_locations=face_locations)
@@ -80,6 +68,8 @@ def match_celeb():
             return jsonify({"error": "No face found"}), 400
 
         input_encoding = encs[0]
+
+        # ✅ Use the already-preloaded celebrity_encodings
         distances = face_recognition.face_distance(celebrity_encodings, input_encoding)
         best_idx = np.argmin(distances)
         match_name = celebrity_names[best_idx]
@@ -101,10 +91,6 @@ def match_celeb():
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-
-# --------------------------------------------------------------------
-# Local dev auto-open
-# --------------------------------------------------------------------
 def open_browser():
     webbrowser.open_new("http://127.0.0.1:8080/")
 
