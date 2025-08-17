@@ -24,6 +24,10 @@ app = Flask(
 
 CORS(app)
 
+# -------- Global cache (load only once) --------
+encodings_cache = None
+names_cache = None
+
 
 @app.route('/')
 def serve_frontend():
@@ -33,6 +37,8 @@ def serve_frontend():
 
 @app.route('/match', methods=['POST'])
 def match_celeb():
+    global encodings_cache, names_cache
+
     if 'image' not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
@@ -45,32 +51,33 @@ def match_celeb():
     file.save(temp_filename)
 
     try:
-        # Load the submitted image
         input_image = face_recognition.load_image_file(temp_filename)
         face_locations = face_recognition.face_locations(input_image, model=algorithm)
-        input_encodings = face_recognition.face_encodings(input_image, known_face_locations=face_locations)
-
-        if not input_encodings:
+        if not face_locations:
             return jsonify({"error": "No face found"}), 400
 
-        input_encoding = input_encodings[0]
+        input_encoding = face_recognition.face_encodings(
+            input_image, known_face_locations=face_locations
+        )[0]
 
-        # ✅ Load celebrity encodings only for this request
-        celebrity_encodings = []
-        celebrity_names = []
-        for filename in os.listdir(CELEB_DIR):
-            path = os.path.join(CELEB_DIR, filename)
-            if imghdr.what(path):  # skip non-images
-                img = face_recognition.load_image_file(path)
-                encodings = face_recognition.face_encodings(img)
-                if encodings:
-                    celebrity_encodings.append(encodings[0])
-                    celebrity_names.append(os.path.splitext(filename)[0])
+        # ✅  Load celebrity encodings only ONE time (after first request)
+        if encodings_cache is None:
+            encodings_cache = []
+            names_cache = []
+            for filename in os.listdir(CELEB_DIR):
+                path = os.path.join(CELEB_DIR, filename)
+                if imghdr.what(path):  # skip non-images
+                    img = face_recognition.load_image_file(path)
+                    enc = face_recognition.face_encodings(img)
+                    if enc:
+                        encodings_cache.append(enc[0])
+                        names_cache.append(os.path.splitext(filename)[0])
+            print(f"[INFO] Loaded {len(names_cache)} celebrity faces into memory")
 
-        # Match
-        distances = face_recognition.face_distance(celebrity_encodings, input_encoding)
-        best_index = np.argmin(distances)
-        match_name = celebrity_names[best_index]
+        # Match against cached encodings
+        distances = face_recognition.face_distance(encodings_cache, input_encoding)
+        best_index = int(np.argmin(distances))
+        match_name = names_cache[best_index]
         similarity = 1 - distances[best_index]
 
         host_url = request.host_url.rstrip('/')
@@ -79,7 +86,7 @@ def match_celeb():
         return jsonify({
             "match_name": match_name,
             "similarity": round(similarity * 100, 2),
-            "celebrity_image": image_url
+            "celebrity_image": image_url,
         })
 
     except Exception as e:
